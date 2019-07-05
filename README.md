@@ -16,7 +16,6 @@ The idea is inspired by **bopscrk** of R3nt0n. I don't pretend to create this al
 + The tool will generate **all possible combinations** between them.
 + To generate more combinations, it will add some **common separators** (e.g. "-", "_", "."), **random numbers** and **special chars**.
 + You can enable **leet** and **case transforms** to increase your chances.
-+ If you enable **lyricpass mode**, the tool will ask you about **artists** and it will download all his **songs' lyrics**. Each line will be added as a new word. Then it will be **transform in several ways** (leet, case, only first letters, with and without spaces...). Artist names will be added too.
 + You can provide wordlists that you already tried against the target in order to exclude all this words from the resultant wordlist (`-x`). 
  
 
@@ -49,7 +48,6 @@ The idea is inspired by **bopscrk** of R3nt0n. I don't pretend to create this al
 + In the others field you can write **several words comma-separated**. *Example*: 2C,Flipper.
 + Using the **non-interactive mode**, you should provide years in the long and short way (1970,70) to get the same result than the interactive mode.
 + You have to be careful with **-n** argument. If you set a big value, it could result in **too huge wordlists**. I recommend values between 2 and 5.
-+ To feed lyricpass with **several artists** through command line you should provides it **comma-separated** and **quotes-enclosed**. *Example*: `-a "john doe,john smith"`
 
 
 ## Legal disclaimer
