@@ -15,7 +15,7 @@ __version__ = '0.1'
 __status__ = 'Development'
 
 # Constants
-separators = ('.', '_', '-', '123', '$', '%', '&', '#', '@')
+separators = ('.', '_', '-', )#'123', '$', '%', '&', '#', '@')
 leet_alphabet = {'a': '4', 'i': '1', 'e': '3', 's': '5', 'b': '8', 'o': '0'}
 
 #** Class Color **#
@@ -280,8 +280,8 @@ def asks():
 
     others = input(u'  {}[?]{} Some other relevant words (comma-separated) >>> '.format(color.BLUE, color.END))
 
-    leet = input(u'  {}[?]{} Do yo want to make leet transforms? [y/n] >>> '.format(color.BLUE, color.END))
-    case = input(u'  {}[?]{} Do yo want to make case transforms? [y/n] >>> '.format(color.BLUE, color.END))
+    leet = input(u'  {}[?]{} Do you want to make leet transforms? [y/n] >>> '.format(color.BLUE, color.END))
+    case = input(u'  {}[?]{} Do you want to make case transforms? [y/n] >>> '.format(color.BLUE, color.END))
 
     if leet.lower() == 'y': leet = True
     else: leet = False
@@ -360,7 +360,7 @@ def main():
     if interactive:
         clear()
         banner()
-        base_wordlist, minLength, maxLength, case, leet, nWords, exclude_wordlists, outfile = asks()
+        base_wordlist, minLength, maxLength, leet, case, nWords, exclude_wordlists, outfile = asks()
 
     else:
         base_wordlist = []
