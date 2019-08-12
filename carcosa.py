@@ -15,7 +15,7 @@ __version__ = '0.1'
 __status__ = 'Development'
 
 # Constants
-separators = ('.', '_', '-', )#'123', '$', '%', '&', '#', '@')
+separators = ('.', '_', '-', '123', '$', '%', '&', '#', '@')
 leet_alphabet = {'a': '4', 'i': '1', 'e': '3', 's': '5', 'b': '8', 'o': '0'}
 
 #** Class Color **#
@@ -69,6 +69,14 @@ parser.add_argument('-o', '--output', action="store", metavar='', type=str,
                     dest='outfile', default='tmp.txt',
                     help='output file to save the wordlist (default: tmp.txt)')
 
+parser.add_argument('--prefix', action="store", metavar='', type=str,
+                    dest='prefix', default='', help='add prefix')
+
+parser.add_argument('--postfix', action="store", metavar='', type=str,
+                    dest='postfix', default='', help='add postfix')
+
+parser.add_argument('--title', action="store_true", help='add title version of each word')
+parser.add_argument('--upper', action="store_true", help='add upper-case version of each word')
 
 #** Banner function **#
 def banner():
@@ -241,6 +249,16 @@ def leet_transforms(word):
     return new_wordlist
 
 
+#** Title transformation **#
+def title_transform(word):
+    return [word.title()]
+
+
+#** Upper transformation **#
+def upper_transform(word):
+    return [word.upper()]  
+
+
 #** Asking the config (only in interactive mode) **#
 def asks():
     while True:
@@ -282,12 +300,22 @@ def asks():
 
     leet = input(u'  {}[?]{} Do you want to make leet transforms? [y/n] >>> '.format(color.BLUE, color.END))
     case = input(u'  {}[?]{} Do you want to make case transforms? [y/n] >>> '.format(color.BLUE, color.END))
+    title = input(u'  {}[?]{} Do you want to make title transform? [y/n] >>> '.format(color.BLUE, color.END))
+    upper = input(u'  {}[?]{} Do you want to make upper transform? [y/n] >>> '.format(color.BLUE, color.END))
+    prefix = input(u'  {}[?]{} Enter a prefix if you want to >>> '.format(color.BLUE, color.END))
+    postfix = input(u'  {}[?]{} Enter a postfix if you want to >>> '.format(color.BLUE, color.END))
 
     if leet.lower() == 'y': leet = True
     else: leet = False
 
     if case.lower() == 'y': case = True
     else: case = False
+
+    if title.lower() == 'y': title = True
+    else: title = False
+
+    if upper.lower() == 'y': upper = True
+    else: upper = False
 
     while True:
         nWords = input(u'  {}[?]{} How much words do you want to combine at most [2] >>> '.format(color.BLUE, color.END))
@@ -342,9 +370,9 @@ def asks():
     if not is_empty(others):
         others = others.split(',')
         for i in others:
-            wordlist.append(i.lower())
+            wordlist.append(i)
 
-    return wordlist, minLength, maxLength, leet, case, nWords, exclude, outfile
+    return wordlist, minLength, maxLength, leet, case, title, upper, prefix, postfix, nWords, exclude, outfile
 
 
 #** Main **#
@@ -360,20 +388,24 @@ def main():
     if interactive:
         clear()
         banner()
-        base_wordlist, minLength, maxLength, leet, case, nWords, exclude_wordlists, outfile = asks()
+        base_wordlist, minLength, maxLength, leet, case, title, upper, prefix, postfix, nWords, exclude_wordlists, outfile = asks()
 
     else:
         base_wordlist = []
         if args.words:
             raw_wordlist = (args.words).split(',')
             for word in raw_wordlist:
-                base_wordlist.append(word.lower())
+                base_wordlist.append(word)
         minLength = args.min
         maxLength = args.max
         case = args.case
         leet = args.leet
+        title = args.title
+        upper = args.upper
         nWords = args.nWords
         outfile = args.outfile
+        prefix = args.prefix
+        postfix = args.postfix
 
         exclude_wordlists = args.exclude
         if exclude_wordlists:
@@ -389,6 +421,54 @@ def main():
 
     wordlist = base_wordlist[:] # Copy to preserve the original
 
+    # Title transform
+    startT = time.time()
+    if title:
+        thread_transforms(title_transform, base_wordlist)
+    totalT = round(time.time() - startT, 2)
+    print(f'\n{totalT}s for title transform')
+
+    startT = time.time()
+    wordlist = list(set(wordlist))
+    totalT = round(time.time() - startT, 2)
+    print(f'{totalT}s for checking for duplicates')
+
+    # Upper transform
+    startT = time.time()
+    if upper:
+        thread_transforms(upper_transform, base_wordlist)
+    totalT = round(time.time() - startT, 2)
+    print(f'{totalT}s for upper transform')
+
+    startT = time.time()
+    wordlist = list(set(wordlist))
+    totalT = round(time.time() - startT, 2)
+    print(f'{totalT}s for checking for duplicates')
+    
+    # # Case transforms
+    # startT = time.time()
+    # if case:
+    #     thread_transforms(case_transforms, wordlist)
+    # totalT = round(time.time() - startT, 2)
+    # print(f'\n{totalT}s for case transforms')
+
+    # startT = time.time()
+    # wordlist = list(set(wordlist))
+    # totalT = round(time.time() - startT, 2)
+    # print(f'{totalT}s for checking for duplicates')
+
+    # # Leet transforms
+    # startT = time.time()
+    # if leet:
+    #     thread_transforms(leet_transforms, wordlist)
+    # totalT = round(time.time() - startT, 2)
+    # print(f'{totalT}s for leet transforms')
+
+    # startT = time.time()
+    # wordlist = list(set(wordlist))
+    # totalT = round(time.time() - startT, 2)
+    # print(f'{totalT}s for checking for duplicates')
+
     # Word combinations
     if nWords > 1:
         wordlist = combinator(base_wordlist, 2)
@@ -398,18 +478,21 @@ def main():
             wordlist += combinator(base_wordlist, i)
 
     # Word combinations with common separators
+    startT = time.time()
     wordlist += add_common_separators(base_wordlist)
     # Check for duplicates
     wordlist = list(OrderedDict.fromkeys(wordlist))
     # Remove words which doesn't match the min-max range established
     wordlist = remove_by_lengths(wordlist, minLength, maxLength)
+    totalT = round(time.time() - startT, 2)
+    print(f'{totalT}s for permutations and adding separators')
 
     # Case transforms
     startT = time.time()
     if case:
         thread_transforms(case_transforms, wordlist)
     totalT = round(time.time() - startT, 2)
-    print(f'\n{totalT}s for case transforms')
+    print(f'{totalT}s for case transforms')
 
     startT = time.time()
     wordlist = list(set(wordlist))
@@ -428,6 +511,11 @@ def main():
     totalT = round(time.time() - startT, 2)
     print(f'{totalT}s for checking for duplicates')
 
+    # Adding prefix and postfix
+    startT = time.time()
+    wordlist = [prefix + word + postfix for word in wordlist]
+    totalT = round(time.time() - startT, 2)
+    print(f'{totalT}s for adding prefix and postfix')
 
     # Exclude from other wordlists
     startT = time.time()
