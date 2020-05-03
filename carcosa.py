@@ -164,11 +164,12 @@ def combinator(wordlist, nWords):
     return list(set(new_wordlist))
 
 
-#** Remove word if its length is out of range **#
+# ** Remove word if its length is out of range **#
 def remove_by_lengths(wordlist, minLength, maxLength):
-    for word in wordlist:
-        if (len(word) < minLength) or (len(word) > maxLength): wordlist.remove(word)
-    return wordlist
+    return list(filter(
+        lambda word: len(word) in range(minLength, maxLength+1),
+        wordlist
+    ))
 
 
 #** Work with threads **#
