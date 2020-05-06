@@ -5,8 +5,7 @@ import time
 import itertools
 import argparse
 from random import randint, choice
-from collections import OrderedDict
-from multiprocessing.dummy import Pool as ThreadPool
+import concurrent.futures
 
 global name, __author__,  __version__
 name = 'carcosa.py'
@@ -17,6 +16,8 @@ __status__ = 'Development'
 # Constants
 separators = ('.', '_', '-', '123', '$', '%', '&', '#', '@')
 leet_alphabet = {'a': '4', 'i': '1', 'e': '3', 's': '5', 'b': '8', 'o': '0'}
+THREADS_NUM = 4
+
 
 #** Class Color **#
 class color:
@@ -60,10 +61,6 @@ parser.add_argument('-n', action="store", metavar='', type=int, dest='nWords',
                     default=2, help='max amount of words to combine each time '
                                     '(default: 2)')
 
-parser.add_argument('-x', '--exclude', action="store", metavar='', type=str,
-                    dest='exclude', default=False,
-                    help='exclude all the words included in other wordlists '
-                         '(several wordlists should be comma-separated)')
 
 parser.add_argument('-o', '--output', action="store", metavar='', type=str,
                     dest='outfile', default='tmp.txt',
@@ -94,6 +91,33 @@ def banner():
     print(u'  | [__][][][]{}[]{}[]{}[]{}[][][][][][__]    [][][]  [][][]|| |  |------------|'.format(color.KEY_HIGHL, color.END, color.KEY_HIGHL, color.END))
     print(u'  |   [__][________________][__]              [__][]|| |  |{}  {}  {}|'.format(color.GREEN, __author__, color.END))
     print(u'  `----------------------------------------------------´  `------------´\n')
+
+
+def chunk(seq, num):
+    avg = len(seq) / float(num)
+    out = []
+    last = 0.0
+
+    while last < len(seq):
+        out.append(seq[int(last):int(last + avg)])
+        last += avg
+
+    return out
+
+
+def run_in_multiprocessing(func, wordlist, *args):
+    results = list()
+    with concurrent.futures.ProcessPoolExecutor(max_workers=THREADS_NUM) as executor:
+        futures = list()
+        for c in chunk(wordlist, THREADS_NUM):
+            futures.append(
+                executor.submit(func, c, *args)
+            )
+
+        for f in futures:
+            results.extend(f.result())
+
+    return results
 
 
 #** Clear function for terminal/cmd **#
@@ -135,33 +159,38 @@ def add_common_separators(wordlist):
     :param wordlist: the base wordlist to combine
     :return: a new wordlist with all the combinations
     """
-    words = wordlist[:]
     new_wordlist = []
-    combinations = itertools.permutations(words, 2)
+    combinations = itertools.permutations(wordlist, 2)
 
     for c in combinations:
         for s in separators:
-            new_wordlist.append(f'{s}'.join(c))
+            new_wordlist.append(s.join(c))
             new_wordlist.append(s + ''.join(c))
             new_wordlist.append(''.join(c) + s)
 
+            # print(len(new_wordlist))
+
     for s in separators:
-        for w in words:
+        for w in wordlist:
             new_wordlist.append(w + s)
             new_wordlist.append(s + w)
 
     return new_wordlist
 
 
-
 #** Combinator **#
 def combinator(wordlist, nWords):
-    new_wordlist = wordlist[:]  # I need copy to use itertools properly
-    wlist_combined = itertools.permutations(new_wordlist, nWords)
-    for combination in wlist_combined:
-        new_wordlist.append(''.join(combination))
+    combinations = list()
 
-    return list(set(new_wordlist))
+    for n in range(2, nWords+1):
+        combinations.extend(
+            list(map(
+                lambda combination: ''.join(combination),
+                itertools.permutations(wordlist, n)
+            ))
+        )
+
+    return list(set(combinations))
 
 
 # ** Remove word if its length is out of range **#
@@ -172,92 +201,86 @@ def remove_by_lengths(wordlist, minLength, maxLength):
     ))
 
 
-#** Work with threads **#
-def thread_transforms(transform_type, wordlist):
-    pool = ThreadPool(16)
-    # process each word in their own thread and return the results
-    new_wordlist = pool.map(transform_type, wordlist)
-    pool.close()
-    pool.join()
-    for lists in new_wordlist:
-        wordlist += lists
-    #return new_wordlist
-
-
 #** Transfroming spaces inside the word and returning all the variations **#
 def space_transforms(word):
-    new_wordlist = []
-    new_wordlist.append(word.replace(' ', ''))
-    new_wordlist.append(word.replace(' ', '.'))
-    new_wordlist.append(word.replace(' ', '_'))
-    new_wordlist.append(word.replace(' ', '-'))
-    return new_wordlist
-
-
-#** Needed for map **#
-def exclude(word):
-    if word not in words_to_exclude:
-        #return word
-        yield word
+    word_variations = []
+    word_variations.append(word.replace(' ', ''))
+    word_variations.append(word.replace(' ', '.'))
+    word_variations.append(word.replace(' ', '_'))
+    word_variations.append(word.replace(' ', '-'))
+    return list(set(word_variations))
 
 
 #** Case transformation **#
-def case_transforms(word):
-    new_wordlist = []
+def case_transforms(wordlist):
+    case_transformed = list()
+    for word in wordlist:
+        # Make each one upper (hello => Hello, hEllo, heLlo, helLo, hellO)
+        i = 0
+        for char in word:
+            new_word = word[:i] + char.upper() + word[i+1:]
+            i += 1
+            case_transformed.append(new_word)
 
-    # Make each one upper (hello => Hello, hEllo, heLlo, helLo, hellO)
-    i = 0
-    for char in word:
-        new_word = word[:i] + char.upper() + word[i+1:]
-        i += 1
-        new_wordlist.append(new_word)
+        # Make pairs and odds upper (hello => HeLlO)
+        i = 0
+        pairs_upper = ''
+        for char in word:
+            if i % 2 == 0:
+                pairs_upper += char.upper()
+            else:
+                pairs_upper += char
+            i += 1
+        odds_upper = pairs_upper.swapcase()
+        case_transformed.append(pairs_upper)
+        case_transformed.append(odds_upper)
 
-    # Make pairs and odds upper (hello => HeLlO)
-    i = 0
-    pairs_upper = ''
-    for char in word:
-        if i % 2 == 0: pairs_upper += char.upper()
-        else: pairs_upper += char
-        i += 1
-    odds_upper = pairs_upper.swapcase()
-    new_wordlist.append(pairs_upper)
-    new_wordlist.append(odds_upper)
+        # Make consonants and vowels upper (hello => HeLLo)
+        vowels = 'aeiou'
+        consonants_upper = ''
+        for char in word:
+            if char not in vowels:
+                consonants_upper += char.upper()
+            else:
+                consonants_upper += char
 
-    # Make consonants and vowels upper (hello => HeLLo)
-    vowels = 'aeiou'
-    consonants_upper = ''
-    for char in word:
-        if char not in vowels: consonants_upper += char.upper()
-        else: consonants_upper += char
-    vowels_upper = consonants_upper.swapcase()
-    if consonants_upper not in new_wordlist: new_wordlist.append(consonants_upper)
-    if vowels_upper not in new_wordlist: new_wordlist.append(vowels_upper)
+        vowels_upper = consonants_upper.swapcase()
 
-    return list(set(new_wordlist))
+        case_transformed.append(vowels_upper)
+        case_transformed.append(consonants_upper)
+
+    return list(set(case_transformed))
 
 
 #** Leet transformation **#
-def leet_transforms(word):
-    new_wordlist = []
+def leet_transforms(wordlist):
+    leet_transformed = list()
 
-    i = 0
-    for char in word:
-        if char.lower() in leet_alphabet.keys():
-            word = word[:i] + leet_alphabet[char.lower()] + word[i + 1:]
-            new_wordlist.append(word)
-        i += 1
+    for word in wordlist:
+        i = 0
+        for char in word:
+            if char.lower() in leet_alphabet.keys():
+                word = word[:i] + leet_alphabet[char.lower()] + word[i + 1:]
+                leet_transformed.append(word)
+            i += 1
 
-    return new_wordlist
+    return leet_transformed
 
 
 #** Title transformation **#
-def title_transform(word):
-    return [word.title()]
+def title_transform(wordlist):
+    return list(map(
+        lambda word: word.title,
+        wordlist,
+    ))
 
 
 #** Upper transformation **#
-def upper_transform(word):
-    return [word.upper()]  
+def upper_transform(wordlist):
+    return list(map(
+        lambda word: word.title,
+        wordlist,
+    ))
 
 
 #** Asking the config (only in interactive mode) **#
@@ -333,22 +356,6 @@ def asks():
             except ValueError:
                 print(u'  {}[!]{} Should be an integer'.format(color.RED, color.END))
 
-    while True:
-        exclude = input(u'  {}[?]{} Exclude words from other wordlists? >>> '.format(color.BLUE, color.END))
-        if is_empty(exclude):
-            exclude = False
-            break
-        else:
-            exclude = exclude.split(',')
-            valid_paths = True
-            for wl_path in exclude:
-                if not os.path.isfile(wl_path):
-                    valid_paths = False
-                    print(u'  {}[!]{} {} not found'.format(color.RED, color.END, wl_path))
-
-            if valid_paths:
-                break
-
     outfile = input(u'  {}[?]{} Output file [tmp.txt] >>> '.format(color.BLUE, color.END))
     if is_empty(outfile): outfile = u'tmp.txt'
 
@@ -373,7 +380,7 @@ def asks():
         for i in others:
             wordlist.append(i)
 
-    return wordlist, minLength, maxLength, leet, case, title, upper, prefix, postfix, nWords, exclude, outfile
+    return wordlist, minLength, maxLength, leet, case, title, upper, prefix, postfix, nWords, outfile
 
 
 #** Main **#
@@ -389,12 +396,12 @@ def main():
     if interactive:
         clear()
         banner()
-        base_wordlist, minLength, maxLength, leet, case, title, upper, prefix, postfix, nWords, exclude_wordlists, outfile = asks()
+        base_wordlist, minLength, maxLength, leet, case, title, upper, prefix, postfix, nWords, outfile = asks()
 
     else:
         base_wordlist = []
         if args.words:
-            raw_wordlist = (args.words).split(',')
+            raw_wordlist = args.words.split(',')
             for word in raw_wordlist:
                 base_wordlist.append(word)
         minLength = args.min
@@ -408,24 +415,16 @@ def main():
         prefix = args.prefix
         postfix = args.postfix
 
-        exclude_wordlists = args.exclude
-        if exclude_wordlists:
-            exclude_wordlists = exclude_wordlists.split(',')
-            for wl_path in exclude_wordlists:
-                if not os.path.isfile(wl_path):
-                    print(u'  {}[!]{} {} not found'.format(color.RED, color.END, wl_path))
-                    sys.exit(4)
-
 
     # Initial timestamp
     start_time = time.time()
 
-    wordlist = base_wordlist[:] # Copy to preserve the original
+    wordlist = base_wordlist[:]  # copying
 
     # Title transform
     startT = time.time()
     if title:
-        thread_transforms(title_transform, base_wordlist)
+        wordlist += title_transform(wordlist)
     totalT = round(time.time() - startT, 2)
     print(f'\n{totalT}s for title transform')
 
@@ -437,7 +436,7 @@ def main():
     # Upper transform
     startT = time.time()
     if upper:
-        thread_transforms(upper_transform, base_wordlist)
+        wordlist += upper_transform(wordlist)
     totalT = round(time.time() - startT, 2)
     print(f'{totalT}s for upper transform')
 
@@ -446,52 +445,62 @@ def main():
     totalT = round(time.time() - startT, 2)
     print(f'{totalT}s for checking for duplicates')
     
-    # # Case transforms
-    # startT = time.time()
-    # if case:
-    #     thread_transforms(case_transforms, wordlist)
-    # totalT = round(time.time() - startT, 2)
-    # print(f'\n{totalT}s for case transforms')
+    # Case transforms
+    startT = time.time()
+    if case:
+        wordlist += case_transforms(wordlist)
+    totalT = round(time.time() - startT, 2)
+    print(f'\n{totalT}s for case transforms')
 
-    # startT = time.time()
-    # wordlist = list(set(wordlist))
-    # totalT = round(time.time() - startT, 2)
-    # print(f'{totalT}s for checking for duplicates')
+    startT = time.time()
+    wordlist = list(set(wordlist))
+    totalT = round(time.time() - startT, 2)
+    print(f'{totalT}s for checking for duplicates')
 
-    # # Leet transforms
-    # startT = time.time()
-    # if leet:
-    #     thread_transforms(leet_transforms, wordlist)
-    # totalT = round(time.time() - startT, 2)
-    # print(f'{totalT}s for leet transforms')
+    # Leet transforms
+    startT = time.time()
+    if leet:
+        wordlist += leet_transforms(wordlist)
+    totalT = round(time.time() - startT, 2)
+    print(f'{totalT}s for leet transforms')
 
-    # startT = time.time()
-    # wordlist = list(set(wordlist))
-    # totalT = round(time.time() - startT, 2)
-    # print(f'{totalT}s for checking for duplicates')
+    startT = time.time()
+    wordlist = list(set(wordlist))
+    totalT = round(time.time() - startT, 2)
+    print(f'{totalT}s for checking for duplicates')
 
+    startT = time.time()
     # Word combinations
-    if nWords > 1:
-        wordlist = combinator(base_wordlist, 2)
-        i = 2
-        while i < nWords:
-            i += 1
-            wordlist += combinator(base_wordlist, i)
+    wordlist = combinator(wordlist, nWords)
+    # wordlist = run_in_multiprocessing(
+    #     combinator,
+    #     wordlist, nWords
+    # )
+    totalT = round(time.time() - startT, 2)
+    print(f'{totalT}s for combinator')
 
     # Word combinations with common separators
     startT = time.time()
     wordlist += add_common_separators(base_wordlist)
     # Check for duplicates
-    wordlist = list(OrderedDict.fromkeys(wordlist))
-    # Remove words which doesn't match the min-max range established
-    wordlist = remove_by_lengths(wordlist, minLength, maxLength)
+    wordlist = list(set(wordlist))
     totalT = round(time.time() - startT, 2)
-    print(f'{totalT}s for permutations and adding separators')
+    print(f'{totalT}s for adding separators')
+
+    # Remove words which doesn't match the min-max range established
+    startT = time.time()
+    wordlist = remove_by_lengths(wordlist, minLength, maxLength)
+    # wordlist = run_in_multiprocessing(
+    #     remove_by_lengths,
+    #     wordlist, minLength, maxLength
+    # )
+    totalT = round(time.time() - startT, 2)
+    print(f'{totalT}s for remove_by_lengths')
 
     # Case transforms
     startT = time.time()
     if case:
-        thread_transforms(case_transforms, wordlist)
+        wordlist += case_transforms(wordlist)
     totalT = round(time.time() - startT, 2)
     print(f'{totalT}s for case transforms')
 
@@ -503,7 +512,7 @@ def main():
     # Leet transforms
     startT = time.time()
     if leet:
-        thread_transforms(leet_transforms, wordlist)
+        wordlist += leet_transforms(wordlist)
     totalT = round(time.time() - startT, 2)
     print(f'{totalT}s for leet transforms')
 
@@ -514,37 +523,13 @@ def main():
 
     # Adding prefix and postfix
     startT = time.time()
-    wordlist = [prefix + word + postfix for word in wordlist]
+    if prefix or postfix:
+        wordlist = list(map(
+            lambda word: prefix + word + postfix,
+            wordlist
+        ))
     totalT = round(time.time() - startT, 2)
     print(f'{totalT}s for adding prefix and postfix')
-
-    # Exclude from other wordlists
-    startT = time.time()
-    if exclude_wordlists:
-        global words_to_exclude
-        words_to_exclude = []
-
-        for wl_path in exclude_wordlists:
-            with open(wl_path, 'r') as wlist_file:
-                wl = wlist_file.read()
-            wl = wl.split('\n')
-            words_to_exclude += wl
-
-        pool = ThreadPool(16)
-        final_wordlist = pool.map(exclude, wordlist)
-        pool.close()
-        pool.join()
-
-        wordlist = [word for word in final_wordlist if word is not None]
-    totalT = round(time.time() - startT, 2)
-    print(f'{totalT}s for excluding from other wordlists')
-
-    # Check for duplicates
-    if exclude_wordlists:
-        startT = time.time()
-        wordlist = list(set(wordlist))
-        totalT = round(time.time() - startT, 2)
-        print(f'{totalT}s for checking for duplicates')
 
     startT = time.time()
     # Saving data to a file
