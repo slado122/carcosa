@@ -37,7 +37,7 @@ class color:
     KEY_HIGHL = choice(RAND_KEY_COLOR)
 
 
-#** Args definition **#
+# ---- Args definition ----
 
 parser = argparse.ArgumentParser(description='Generates smart and powerful wordlists.')
 
@@ -389,7 +389,7 @@ def main():
     interactive = args.interactive
     if len(sys.argv) == 1: # Print help and exit when runs without args
         parser.print_help(sys.stdout)
-        sys.exit(2)  
+        sys.exit(2)
 
 
     # Settings
@@ -444,7 +444,7 @@ def main():
     wordlist = list(set(wordlist))
     totalT = round(time.time() - startT, 2)
     print(f'{totalT}s for checking for duplicates')
-    
+
     # Case transforms
     startT = time.time()
     if case:
