@@ -19,7 +19,7 @@ leet_alphabet = {'a': '4', 'i': '1', 'e': '3', 's': '5', 'b': '8', 'o': '0'}
 THREADS_NUM = 4
 
 
-#** Class Color **#
+# ---- Class Color ----
 class color:
     PURPLE = '\033[95m'
     CYAN = '\033[96m'
